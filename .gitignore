@@ -1,0 +1,24 @@
+# Credentials and local configuration
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.pfx
+*.p12
+.aws/
+
+# Editor and agent workspace files
+.vscode/
+.idea/
+.codex/
+.agents/
+
+# Local dependencies and generated files
+node_modules/
+__pycache__/
+*.log
+*.tmp
+*.bak
+.DS_Store
+Thumbs.db
