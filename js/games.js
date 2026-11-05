@@ -48,21 +48,34 @@ function mountGame(kind, container, onWin) {
     return [name,image];
   }));
   const pressed = new Set(), pointers = new Map();
-  const held = key => pressed.has(key) || [...pointers.values()].includes(key);
+  // Capture can be released before the browser delivers lostpointercapture.
+  const held = key => pressed.has(key) || [...pointers].some(([id,pointer])=>
+    pointer.key===key && pointer.button.hasPointerCapture(id));
   const controller = new AbortController();
   const listen = (target,type,fn) => target.addEventListener(type,fn,{signal:controller.signal});
   const reducedMotion=matchMedia("(prefers-reduced-motion: reduce)").matches;
   const restart=container.querySelector("#restart");
   let frame, last, player, berries, items, time, spawn, score, won, jump, drops;
   let victory, itemFlight, reaction, dragPointer;
+  function releaseControls() {
+    const captured=[...pointers.entries()];
+    pointers.clear();
+    pressed.clear();
+    jump=false;
+    for(const [id,{button}] of captured) {
+      if(button.hasPointerCapture(id)) button.releasePointerCapture(id);
+    }
+    if(dragPointer!==undefined && canvas.hasPointerCapture(dragPointer)) canvas.releasePointerCapture(dragPointer);
+    dragPointer=undefined;
+  }
   function reset() {
     itemFlight?.cancel();
-    victory=undefined; reaction=undefined; dragPointer=undefined;
+    releaseControls();
+    victory=undefined; reaction=undefined;
     victoryPanel.hidden=true;
     player = {x:hunt?12:225,y:197,vy:0,ground:true,face:1};
     berries = targets.map(([x,y]) => ({x,y,taken:false}));
     items=[]; time=0; spawn=hunt ? .4 : .8; score=0; won=false; jump=false; drops=0;
-    pressed.clear(); pointers.clear();
     feedback.textContent = hunt ? "Some berries are hiding up high." : "Catch six ribbon-wrapped presents!";
     updateScore();
   }
@@ -72,7 +85,7 @@ function mountGame(kind, container, onWin) {
     if(score === goal) {
       won=true;
       feedback.textContent="";
-      pressed.clear(); pointers.clear(); jump=false; dragPointer=undefined;
+      releaseControls();
       victory={start:last, item};
       if(hunt && !reducedMotion) flyItem(item, document.querySelector("#inventory"), art.berry);
       onWin();
@@ -310,15 +323,23 @@ function mountGame(kind, container, onWin) {
     if(key==="jump" && !event.repeat) jump=true;
   });
   listen(window,"keyup",event=>pressed.delete(mapping[event.key] || mapping[event.key.toLowerCase()]));
-  listen(window,"blur",()=>{pressed.clear(); pointers.clear(); dragPointer=undefined;});
+  listen(window,"blur",releaseControls);
+  listen(window,"pagehide",releaseControls);
+  listen(document,"visibilitychange",()=>{if(document.hidden) releaseControls();});
+  for(const type of ["pointerup","pointercancel"]) listen(window,type,event=>pointers.delete(event.pointerId));
   for(const button of container.querySelectorAll("[data-key]")) {
+    listen(button,"contextmenu",event=>event.preventDefault());
+    listen(button,"selectstart",event=>event.preventDefault());
     listen(button,"pointerdown",event=>{
-      if(won) return;
+      if(event.button!==0 || won || document.hidden) return;
+      event.preventDefault();
+      pointers.set(event.pointerId,{key:button.dataset.key,button});
       button.setPointerCapture(event.pointerId);
-      pointers.set(event.pointerId,button.dataset.key);
       if(button.dataset.key==="jump") jump=true;
     });
-    for(const type of ["pointerup","pointercancel","lostpointercapture"]) listen(button,type,event=>pointers.delete(event.pointerId));
+    for(const type of ["pointerup","pointercancel","lostpointercapture"]) listen(button,type,event=>{
+      if(pointers.get(event.pointerId)?.button===button) pointers.delete(event.pointerId);
+    });
   }
   if(!hunt) {
     const move=event=>{
@@ -342,6 +363,6 @@ function mountGame(kind, container, onWin) {
     restart.focus({preventScroll:true});
   });
   reset(); frame=requestAnimationFrame(loop);
-  return ()=>{controller.abort(); cancelAnimationFrame(frame); itemFlight?.cancel();};
+  return ()=>{releaseControls(); controller.abort(); cancelAnimationFrame(frame); itemFlight?.cancel();};
 }
 

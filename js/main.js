@@ -419,14 +419,21 @@ function cakeDecorations() {
   });
 }
 function cakeMarkup(decorations,{lit=false,editable=false,withFox=lit}={}) {
-  const placed=decorations.map(({type,x,y})=>
-    '<span class="cake-topping'+(lit && type==="candle"?" cake-lit":"")+'" style="left:'+x/3.2+'%;top:'+y/2.2+'%">'+toppingArt(type)+'</span>').join("");
+  const placed=decorations.map(({type,x,y})=>{
+    const icon=toppingArt(type).replace(/^<svg[^>]*>|<\/svg>$/g,"");
+    const flame=lit && type==="candle" ?
+      '<circle cx="0" cy="-8" r="22" fill="url(#cake-candle-glow)"/><path class="cake-flame" d="M-1-14h2v2h1v3H1v1h-2v-1h-1v-2h1z"/>' : "";
+    return '<g class="cake-topping" data-type="'+type+'" transform="translate('+x+' '+y+')">'+
+      flame+'<g transform="translate(-8 -8)">'+icon+'</g></g>';
+  }).join("");
   const surface=editable ? '<button class="cake-surface" aria-label="Cake decorating surface. Use arrow keys to aim and Enter or Space to place."></button><span class="cake-cursor" aria-hidden="true"></span>' : "";
   const friend=withFox ? '<div class="cake-friend">'+fox+'</div>' : "";
   const celebration=lit ? '<div class="cake-shower" aria-hidden="true">'+
     Array.from({length:15},(_,i)=>'<i style="--x:'+(7+i*6)+'%;--delay:'+(i%5)*.13+'s;--drift:'+((i%3)-1)*24+'px">'+
       (i%5===0?art.berry:i%3===0?"✦":"")+'</i>').join("")+'</div>' : "";
-  return '<div class="cake-stage'+(lit?" cake-wish":"")+'">'+birthdayTable+'<div class="cake-placed" aria-hidden="true">'+placed+'</div>'+
+  const layer='<svg class="cake-placed" viewBox="0 0 320 220" aria-hidden="true">'+
+    '<defs><radialGradient id="cake-candle-glow"><stop stop-color="#ffcc73" stop-opacity=".47"/><stop offset="1" stop-color="#ffcc73" stop-opacity="0"/></radialGradient></defs>'+placed+'</svg>';
+  return '<div class="cake-stage'+(lit?" cake-wish":"")+'">'+birthdayTable+layer+
     friend+celebration+surface+'</div>';
 }
 function cakeBounds(y) {
